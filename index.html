@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <link rel="stylesheet" href="bootstrap/css/bootstrap.min.css">
+
+    <script src="bootstrap/js/jquery.js"></script>
+    <script src="d3.js"></script>
+
+    <style>
+        #main-div{
+            width: 500px;
+            margin:auto;
+            position: relative;
+        }
+        .floor{
+            height: 300px;
+            border: 1px solid black;
+            text-align: center;
+            background-color: rgba(23, 23, 23, 0.45);
+        }
+        #lift{
+            width: 35%;
+            height: 200px;
+            position: absolute;
+            border: 1px solid black;
+            text-align: center;
+            background-color: #ccc
+        }
+        #lift .buttonParent{
+            width: 55px;
+            float: right;
+            margin-top: 35px;
+        }
+        #lift .button{
+            color: white;
+            background-color:  rgba(23, 23, 23, 0.45);
+        }
+        .arrow-up{
+           margin: 160px 116px 0px 0px;
+        }
+        .arrow-down{
+           margin: 0px 116px 0px 0px;
+        }
+
+    </style>
+</head>
+<body>
+<div>
+    write floor #:
+    <input type="number" id="floorNo">
+</div>
+<div id="main-div">
+    <div id="lift">
+        <div class="buttonParent">
+            <button class="button" onclick="callLift(1)">1</button>
+            <button class="button" onclick="callLift(2)">2</button>
+            <button class="button" onclick="callLift(3)">3</button>
+            <button class="button" onclick="callLift(4)">4</button>
+            <button class="button" onclick="callLift(5)">5</button>
+            <button class="button" onclick="callLift(6)">6</button>
+            <button class="button" onclick="callLift(7)">7</button>
+            <button class="button" onclick="callLift(8)">8</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    var floorHeight = 300;
+    var floors = 1;
+    var liftHeight = 200;
+    var target ;
+    var currentTop = calculateFloorTop(1);
+    var step = 2;
+    var animating = false;
+    var stoppers = {
+        "1": function(){return currentTop >= target},
+        "-1": function(){return currentTop <= target}
+    };
+    var remover = null;
+    var stopper = null;
+    var bag1 = [];          // smaller
+    var bag2 = [];          // greater
+    var waitingBag = bag1;
+    var actionBag = bag2;
+
+    initSystem(8);
+
+    function initSystem(floor) {
+        floors = floor;
+        lift.style.top = currentTop + "px";
+        var data = [];
+        for (var i = 1; i <= floors; i++) {
+            data.push(i);
+        }
+       var nodes =  d3.select("#main-div").selectAll("div.floor");
+        var dataNodes = nodes.data(data);
+        var enteredNodes = dataNodes.enter().append("div").attr("class", "floor");
+      //var allNodes = enteredNodes.merge(nodes)
+        enteredNodes.append("div").text(function (floorNo,index) {return "floor # " + floorNo});
+        enteredNodes.append("div").attr("class","arrow-up").append("span").attr("class","glyphicon glyphicon-circle-arrow-up").on("click",function(floorNo){return callLift(floorNo)});
+        enteredNodes.append("div").attr("class","arrow-down").append("span").attr("class","glyphicon glyphicon-circle-arrow-down").on("click",function(floorNo){return callLift(floorNo)});
+        dataNodes.exit().remove();
+    }
+    function calculateFloorTop(floor){
+        return floorHeight * floor - liftHeight;
+    }
+    function calculateFloorNumber(){
+        var floorNumber = (currentTop + liftHeight) / floorHeight;
+        return Math.sign(step) === 1 ? Math.ceil(floorNumber) : Math.floor(floorNumber);
+    }
+    //    currentTop * floors + floorHeight - liftHeight;/
+    function callLift(floorNumber){
+        var currentFloor = calculateFloorNumber();
+//        if(currentFloor == floorNumber) return;
+
+        var allFloors = bag1.concat(bag2);
+        if(allFloors.indexOf(floorNumber) !== -1) return;
+
+        if(floorNumber < currentFloor){
+            bag1.push(floorNumber);
+        }
+        else if(floorNumber > currentFloor ){
+            bag2.push(floorNumber);
+        }
+        else{
+            actionBag.push(floorNumber);
+        }
+        callLiftNext();
+    }
+    function callLiftNext(){
+        if(actionBag.length == 0 && waitingBag.length == 0){
+            return;
+        }
+        console.log("call lift running");
+        if(actionBag.length === 0) {
+            var temp = actionBag;
+            actionBag = waitingBag;
+            waitingBag = temp;
+        }
+        actionBag.sort();
+        console.log("action bag: " +actionBag);
+        var sign = actionBag === bag1 ? -1 : +1;
+        console.log("actionBag === bag1 " + actionBag === bag1);
+        console.log("sign : " + sign);
+        console.log("bag 1 :" + bag1);
+        console.log("bag 2 :" + bag2);
+        step = Math.abs(step) * sign;
+        stopper = stoppers[sign];
+        if(sign === 1){
+            console.log("running positive direction");
+            moveTo(actionBag[0]);
+            remover = function(){
+                actionBag.shift();
+            }
+        }
+        else{
+            console.log("running negative direction");
+            moveTo(actionBag[actionBag.length-1]);
+            remover = function(){
+                actionBag.pop();
+            }
+        }
+    }
+    function moveTo(floor){
+        console.log("move to function running");
+        target =  calculateFloorTop(floor);
+        if(!target || currentTop == target) return actionBag.shift();
+        animating || animateLift();
+        animating = true;
+    }
+    function animateLift(){
+        console.log("animate function running");
+        if(!stopper) return;
+        if(stopper()){
+            currentTop = target;
+            setTimeout(stop,2000);
+        }
+        else {
+            currentTop += step;
+            requestAnimationFrame(animateLift);
+        }
+        lift.style.top = currentTop + "px";
+    }
+
+function stop(){
+    remover();
+    stopper = null;
+    remover = null;
+    animating = false;
+    console.log("animation has got false");
+    callLiftNext();
+}
+            //create floor
+    d3.select("#floorNo").on("keyup",function(){
+        var floor = this.value;
+        initSystem(floor);
+        if(floor == "")return  initSystem(8);
+    })
+</script>
+</body>
+</html>
